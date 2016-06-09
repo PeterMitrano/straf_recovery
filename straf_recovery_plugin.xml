@@ -1,0 +1,7 @@
+<library path="lib/libstraf_recovery">
+  <class type="straf_recovery::StrafRecovery" base_class_type="nav_core::RecoveryBehavior">
+    <description>
+      A plugin that defines a recovery behavior for omni-directional base robots where the robot translates away from the nearest obstacle
+    </description>
+  </class>
+</library>

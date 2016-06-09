@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>straf_recovery</name>
+  <version>0.0.0</version>
+  <description>The straf_recovery package</description>
+
+  <maintainer email="mitranopeter@gmail.com">Peter Mitrano</maintainer>
+
+  <license>WTFPL</license>
+
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>nav_core</depend>
+  <depend>roscpp</depend>
+
+  <export>
+    <nav_core plugin="${prefix}/straf_recovery_plugin.xml"/>
+  </export>
+</package>
