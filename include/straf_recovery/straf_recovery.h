@@ -41,6 +41,7 @@ private:
   costmap_2d::Costmap2DROS* local_costmap_;
   costmap_2d::Costmap2DROS* global_costmap_;
   base_local_planner::CostmapModel* local_costmap_model_;
+  ros::Publisher straf_pub_;
   double frequency_;
   double maximum_translate_distance_;
   double minimum_translate_distance_;

@@ -39,6 +39,18 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
+
+  //for visualizing
+  straf_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("straf_direction", 10);
+
+  ROS_WARN("Initializing StrafRecovery");
+  ROS_WARN("minimum_translate_distance %f", minimum_translate_distance_);
+  ROS_WARN("maximum_translate_distance %f", maximum_translate_distance_);
+  ROS_WARN("min_vel %f", min_vel_);
+  ROS_WARN("max_vel %f", max_vel_);
+
+  // use the same control frequency as the base local planner
+  base_local_planner_nh.param("frequency", frequency_, 20.0);
 }
 
 void StrafRecovery::runBehavior()
@@ -76,8 +88,35 @@ void StrafRecovery::runBehavior()
   unsigned int robot_map_x, robot_map_y;
   local_costmap_->getCostmap()->worldToMap(robot_x, robot_y, robot_map_x, robot_map_y);
 
+  ROS_WARN("robot pos: %f,%f", robot_x, robot_y);
+
   ClosestObstacle initial_nearest_obstacle = nearestObstacle(local_costmap_, robot_map_x, robot_map_y);
 
+  double obstacle_world_x;
+  double obstacle_world_y;
+  local_costmap_->getCostmap()->mapToWorld(initial_nearest_obstacle.x, initial_nearest_obstacle.y, obstacle_world_x, obstacle_world_y);
+
+  ROS_WARN("obstacle pos: %f,%f", obstacle_world_x, obstacle_world_y);
+
+  geometry_msgs::PoseStamped tmp;
+  tmp.header.frame_id = global_pose.frame_id_;
+  tmp.header.stamp = ros::Time::now();
+  tmp.pose.position.x = robot_x;
+  tmp.pose.position.y = robot_y;
+  tmp.pose.orientation.x = 0;
+  tmp.pose.orientation.y = initial_nearest_obstacle.dist;
+  straf_pub_.publish(tmp);
+
+  geometry_msgs::PoseStamped straf_dir;
+  straf_dir.header.frame_id = global_pose.frame_id_;
+  straf_dir.header.stamp = ros::Time::now();
+  straf_dir.pose.position.x = obstacle_world_x;
+  straf_dir.pose.position.y = obstacle_world_y;
+  straf_dir.pose.orientation.x = 0;
+  straf_dir.pose.orientation.y = initial_nearest_obstacle.dist;
+  straf_pub_.publish(straf_dir);
+
+  return;
   while (n.ok())
   {
     local_costmap_->getRobotPose(global_pose);
@@ -87,8 +126,6 @@ void StrafRecovery::runBehavior()
     robot_y = global_pose.getOrigin().y();
     current_angle = angles::normalize_angle(normalized_angle + start_offset);
 
-    ROS_DEBUG("Current angle in global frame = %f\n", current_angle);
-
     // check if we can rotate
     double theta = 0.0;
     unsigned int map_x = 0.0, map_y = 0.0;
@@ -96,6 +133,7 @@ void StrafRecovery::runBehavior()
     bool can_rotate_in_place = canRotateInPlace(robot_map_x, robot_map_y, theta, global_pose);
 
     ClosestObstacle nearest_obstacle = nearestObstacle(local_costmap_, robot_map_x, robot_map_y);
+
 
     if (nearest_obstacle.dist < initial_nearest_obstacle.dist)
     {
@@ -134,14 +172,14 @@ void StrafRecovery::runBehavior()
 
     vel = std::min(std::max(vel, min_vel_), max_vel_);
 
-    //now that our velocity is limited, project onto our goal
+    ROS_WARN("vel: %f", vel);
 
     geometry_msgs::Twist cmd_vel;
     cmd_vel.linear.x = vel * goal_x;
     cmd_vel.linear.y = vel * goal_y;
     cmd_vel.linear.z = 0.0;
 
-    vel_pub.publish(cmd_vel);
+    //vel_pub.publish(cmd_vel);
 
     r.sleep();
   }
@@ -170,6 +208,7 @@ ClosestObstacle StrafRecovery::nearestObstacle(costmap_2d::Costmap2DROS *local_c
   unsigned int min_x = INT_MAX;
   unsigned int min_y = INT_MAX;
   double minimum_distance = DBL_MAX;
+  double resolution = local_costmap->getCostmap()->getResolution();
   unsigned int cell_x_idx, cell_y_idx;
 
   costmap_2d::Costmap2D *costmap = local_costmap->getCostmap();
@@ -187,8 +226,11 @@ ClosestObstacle StrafRecovery::nearestObstacle(costmap_2d::Costmap2DROS *local_c
       // if we found an obstacle, check and set if it's the new closest
       if (cost_idx >= costmap_2d::LETHAL_OBSTACLE)
       {
+
+        ROS_WARN("LETHAL AT: %d,%d", cell_x_idx, cell_y_idx);
+
         if (dist_idx < minimum_distance) {
-          dist_idx = minimum_distance;
+          minimum_distance = dist_idx;
           min_x = cell_x_idx;
           min_y = cell_y_idx;
         }
@@ -196,8 +238,11 @@ ClosestObstacle StrafRecovery::nearestObstacle(costmap_2d::Costmap2DROS *local_c
     }
   }
 
+
   return ClosestObstacle(min_x, min_y, minimum_distance);
 }
+
+ClosestObstacle::ClosestObstacle(int x, int y, double dist): x(x), y(y), dist(dist) {}
 
 }
 
