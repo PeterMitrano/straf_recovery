@@ -48,6 +48,9 @@ void StrafRecovery::runBehavior() {
   tf::Stamped<tf::Pose> global_pose;
   local_costmap_->getRobotPose(global_pose);
 
+  while (n.ok()) {
+    local_costmap_->getRobotPose(global_pose);
+  }
 
 }
 

@@ -13,6 +13,15 @@ class StrafRecovery : public nav_core::RecoveryBehavior {
   void initialize(std::string, tf::TransformListener *tf,
                   costmap_2d::Costmap2DROS *global_costmap,
                   costmap_2d::Costmap2DROS *local_costmap);
+
+  /** @brief This recovery behavior will translate away from the nearest obstacle in the local costmap.
+   * This is done by finding the nearest points, calculating a tangent, and then finding the normal to that tangent.
+   * The robot moves along that tangent line until all of the following conditions are true:
+   *  - The robot has moved at least the distance specified by min_distance (via parameter server)
+   *  - The robot has moved no more than the distance specified by max_distance (via parameter server)
+   *  - The robot is able to spin freely (IE, rotate recovery would work now)
+   *  - The robot is no closer to any other obstacle than it was when it began translating
+   */
   void runBehavior();
 
  private:
