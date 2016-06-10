@@ -5,16 +5,26 @@
 #include <nav_core/recovery_behavior.h>
 #include <base_local_planner/costmap_model.h>
 
-namespace straf_recovery {
+namespace straf_recovery
+{
 
-class StrafRecovery : public nav_core::RecoveryBehavior {
- public:
+class ClosestObstacle
+{
+public:
+  int x, y;
+  double dist;
+
+  ClosestObstacle(int x, int y, double dist);
+};
+
+class StrafRecovery : public nav_core::RecoveryBehavior
+{
+public:
   StrafRecovery();
-  void initialize(std::string, tf::TransformListener *tf,
-                  costmap_2d::Costmap2DROS *global_costmap,
-                  costmap_2d::Costmap2DROS *local_costmap);
+  void initialize(std::string, tf::TransformListener* tf, costmap_2d::Costmap2DROS* global_costmap,
+                  costmap_2d::Costmap2DROS* local_costmap);
 
-  /** @brief This recovery behavior will translate away from the nearest obstacle in the local costmap.
+  /** \brief This recovery behavior will translate away from the nearest obstacle in the local costmap.
    * This is done by finding the nearest points, calculating a tangent, and then finding the normal to that tangent.
    * The robot moves along that tangent line until all of the following conditions are true:
    *  - The robot has moved at least the distance specified by min_distance (via parameter server)
@@ -24,7 +34,7 @@ class StrafRecovery : public nav_core::RecoveryBehavior {
    */
   void runBehavior();
 
- private:
+private:
   bool initialized_;
   std::string name_;
   tf::TransformListener* tf_;
@@ -32,6 +42,24 @@ class StrafRecovery : public nav_core::RecoveryBehavior {
   costmap_2d::Costmap2DROS* global_costmap_;
   base_local_planner::CostmapModel* local_costmap_model_;
   double frequency_;
+  double maximum_translate_distance_;
+  double minimum_translate_distance_;
+  double max_vel_;
+  double min_vel_;
+
+  /** \return true if the robot can safely rotate
+   * \param x needs to be in the map frame
+   * \param y needs to be in the map frame
+   * \param theta needs to be in the map frame
+   */
+  bool canRotateInPlace(double robot_map_x, double robot_map_y, double theta, tf::Stamped<tf::Pose> global_pose);
+
+  /** \return calculates the distance to and location of the nearest cell with
+   * LETHAL_COST in the local costmap
+   * \param x needs to be in the map frame
+   * \param y needs to be in the map frame
+   */
+  ClosestObstacle nearestObstacle(costmap_2d::Costmap2DROS* local_costmap, double robot_map_x, double robot_map_y);
 };
 
 }
