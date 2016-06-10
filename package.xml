@@ -11,10 +11,17 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
+  <build_depend>libpcl-all-dev</build_depend>
+
+  <exec_depend>libpcl-all</exec_depend>
+
   <depend>nav_core</depend>
   <depend>roscpp</depend>
+
+  <doc_depend>doxygen</doc_depend>
 
   <export>
     <nav_core plugin="${prefix}/straf_recovery_plugin.xml"/>
   </export>
+
 </package>

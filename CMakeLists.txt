@@ -4,6 +4,7 @@ project(straf_recovery)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
+find_package(PCL REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
 )
@@ -23,11 +24,18 @@ catkin_package(
 ## Build ##
 ###########
 
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
 include_directories(include)
 include_directories(
   ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+)
+
+link_directories(
+  ${PCL_LIBRARY_DIRS}
+)
+
+add_definitions(
+  ${PCL_DEFINITIONS}
 )
 
 ## Declare a C++ library
@@ -38,6 +46,7 @@ add_library(straf_recovery
 ## Specify libraries to link a library or executable target against
 target_link_libraries(straf_recovery
   ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 #############
