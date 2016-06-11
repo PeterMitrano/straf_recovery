@@ -11,10 +11,12 @@ namespace straf_recovery
 class ClosestObstacle
 {
 public:
-  int x, y;
+  double x, y;
   double dist;
 
-  ClosestObstacle(int x, int y, double dist);
+  ClosestObstacle(double x, double y, double dist);
+
+  ClosestObstacle();
 };
 
 class StrafRecovery : public nav_core::RecoveryBehavior
@@ -41,7 +43,7 @@ private:
   costmap_2d::Costmap2DROS* local_costmap_;
   costmap_2d::Costmap2DROS* global_costmap_;
   base_local_planner::CostmapModel* local_costmap_model_;
-  ros::Publisher straf_pub_;
+  ros::Publisher obstacle_pub_;
   double frequency_;
   double maximum_translate_distance_;
   double minimum_translate_distance_;
@@ -55,12 +57,13 @@ private:
    */
   bool canRotateInPlace(double robot_map_x, double robot_map_y, double theta, tf::Stamped<tf::Pose> global_pose);
 
-  /** \return calculates the distance to and location of the nearest cell with
-   * LETHAL_COST in the local costmap
-   * \param x needs to be in the map frame
-   * \param y needs to be in the map frame
+  /** \return calculates the distance to and location of the nearest cell with LETHAL cost.
+   * Returned units are costmap cells, and in odom frame.
+   * \param robot_odom_x needs to be in the odom frame, in units of cells
+   * \param robot_odom_y y needs to be in the odom frame, in units of cells
    */
-  ClosestObstacle nearestObstacle(costmap_2d::Costmap2DROS* local_costmap, double robot_map_x, double robot_map_y);
+  ClosestObstacle nearestObstacle(double robot_odom_x, double robot_odom_y);
+
 };
 
 }

@@ -1,5 +1,6 @@
 #include "straf_recovery/straf_recovery.h"
 #include <cmath>
+#include <math.h>
 #include <angles/angles.h>
 #include <pluginlib/class_list_macros.h>
 
@@ -34,14 +35,14 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   private_nh.param("minimum_translate_distance", minimum_translate_distance_, 1.0);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
-  private_nh.param("min_vel", min_vel_, 0.0);
+  private_nh.param("min_vel", min_vel_, 0.1);
   private_nh.param("max_vel", max_vel_, 0.5);
 
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
 
   //for visualizing
-  straf_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("straf_direction", 10);
+  obstacle_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("straf_direction", 10);
 
   ROS_WARN("Initializing StrafRecovery");
   ROS_WARN("minimum_translate_distance %f", minimum_translate_distance_);
@@ -75,65 +76,59 @@ void StrafRecovery::runBehavior()
   ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
 
   tf::Stamped<tf::Pose> global_pose;
+  tf::Stamped<tf::Pose> initial_global_pose;
   local_costmap_->getRobotPose(global_pose);
+  initial_global_pose = global_pose;
 
-  double current_angle = -M_PI;
-  double start_offset = -angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
+  //double current_angle = -M_PI;
+  //double start_offset = -angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
   bool current_distance_translated = 0.0;
 
   // find the nearest obstacle
-  double robot_x = global_pose.getOrigin().x();
-  double robot_y = global_pose.getOrigin().y();
+  double robot_odom_x = global_pose.getOrigin().x();
+  double robot_odom_y = global_pose.getOrigin().y();
 
-  unsigned int robot_map_x, robot_map_y;
-  local_costmap_->getCostmap()->worldToMap(robot_x, robot_y, robot_map_x, robot_map_y);
+  ClosestObstacle initial_nearest_obstacle = nearestObstacle(robot_odom_x, robot_odom_y);
 
-  ROS_WARN("robot pos: %f,%f", robot_x, robot_y);
-
-  ClosestObstacle initial_nearest_obstacle = nearestObstacle(local_costmap_, robot_map_x, robot_map_y);
-
-  double obstacle_world_x;
-  double obstacle_world_y;
-  local_costmap_->getCostmap()->mapToWorld(initial_nearest_obstacle.x, initial_nearest_obstacle.y, obstacle_world_x, obstacle_world_y);
-
-  ROS_WARN("obstacle pos: %f,%f", obstacle_world_x, obstacle_world_y);
-
-  geometry_msgs::PoseStamped tmp;
-  tmp.header.frame_id = global_pose.frame_id_;
-  tmp.header.stamp = ros::Time::now();
-  tmp.pose.position.x = robot_x;
-  tmp.pose.position.y = robot_y;
-  tmp.pose.orientation.x = 0;
-  tmp.pose.orientation.y = initial_nearest_obstacle.dist;
-  straf_pub_.publish(tmp);
-
-  geometry_msgs::PoseStamped straf_dir;
-  straf_dir.header.frame_id = global_pose.frame_id_;
-  straf_dir.header.stamp = ros::Time::now();
-  straf_dir.pose.position.x = obstacle_world_x;
-  straf_dir.pose.position.y = obstacle_world_y;
-  straf_dir.pose.orientation.x = 0;
-  straf_dir.pose.orientation.y = initial_nearest_obstacle.dist;
-  straf_pub_.publish(straf_dir);
-
-  return;
   while (n.ok())
   {
     local_costmap_->getRobotPose(global_pose);
 
-    double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
-    robot_x = global_pose.getOrigin().x();
-    robot_y = global_pose.getOrigin().y();
-    current_angle = angles::normalize_angle(normalized_angle + start_offset);
+    current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
 
-    // check if we can rotate
-    double theta = 0.0;
-    unsigned int map_x = 0.0, map_y = 0.0;
+    //double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
+    //robot_world_x = global_pose.getOrigin().x();
+    //robot_world_y = global_pose.getOrigin().y();
+    //current_angle = angles::normalize_angle(normalized_angle + start_offset);
 
-    bool can_rotate_in_place = canRotateInPlace(robot_map_x, robot_map_y, theta, global_pose);
+    //// check if we can rotate
+    //double theta = 0.0;
 
-    ClosestObstacle nearest_obstacle = nearestObstacle(local_costmap_, robot_map_x, robot_map_y);
+    bool can_rotate_in_place = true;
+    //bool can_rotate_in_place = canRotateInPlace(robot_map_x, robot_map_y, theta, global_pose);
 
+    ClosestObstacle nearest_obstacle = nearestObstacle(robot_odom_x, robot_odom_y);
+
+    tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, global_pose.getOrigin().z());
+    tf::Vector3 diff = global_pose.getOrigin() - obstacle_pose;
+    diff.normalize(); //unit vector in the direction we want to go
+    double yaw = atan2(diff.y() , diff.x()); //TODO: fix variable name so I know how this work
+
+    ROS_WARN("%f,%f %f,%f %f", robot_odom_x, robot_odom_y, nearest_obstacle.x, nearest_obstacle.y, yaw);
+
+    tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw);
+
+    geometry_msgs::PoseStamped obstacle_msg;
+    obstacle_msg.header.frame_id = global_pose.frame_id_;
+    obstacle_msg.header.stamp = ros::Time::now();
+    obstacle_msg.pose.position.x = nearest_obstacle.x;
+    obstacle_msg.pose.position.y = nearest_obstacle.y;
+    obstacle_msg.pose.orientation.x = straf_direction.x();
+    obstacle_msg.pose.orientation.y = straf_direction.y();
+    obstacle_msg.pose.orientation.z = straf_direction.z();
+    obstacle_msg.pose.orientation.w = straf_direction.w();
+
+    obstacle_pub_.publish(obstacle_msg);
 
     if (nearest_obstacle.dist < initial_nearest_obstacle.dist)
     {
@@ -159,27 +154,14 @@ void StrafRecovery::runBehavior()
     }
 
     // go away from obstacles
-
-    // (goal_x, goal_y) is in the direction we want to straf
-    // subtraction of robot_map_x, robot_map_y translates to origin
-    // then do dot product math, assuming x=1 and solving for y
-    // then normalize
-    double goal_x = 1.0;
-    double goal_y  = -(goal_x * (nearest_obstacle.x - robot_map_x)) / nearest_obstacle.y - robot_map_y;
-    double vel = sqrt(goal_x * goal_x + goal_y * goal_y);
-    goal_x /= vel;
-    goal_y /= vel;
-
-    vel = std::min(std::max(vel, min_vel_), max_vel_);
-
-    ROS_WARN("vel: %f", vel);
+    double vel = min_vel_;
 
     geometry_msgs::Twist cmd_vel;
-    cmd_vel.linear.x = vel * goal_x;
-    cmd_vel.linear.y = vel * goal_y;
+    cmd_vel.linear.x = vel * diff.x();
+    cmd_vel.linear.y = vel * diff.y();
     cmd_vel.linear.z = 0.0;
 
-    //vel_pub.publish(cmd_vel);
+    vel_pub.publish(cmd_vel);
 
     r.sleep();
   }
@@ -203,15 +185,17 @@ bool StrafRecovery::canRotateInPlace(double robot_map_x, double robot_map_y, dou
   return true;
 }
 
-ClosestObstacle StrafRecovery::nearestObstacle(costmap_2d::Costmap2DROS *local_costmap, double robot_map_x, double robot_map_y)
+ClosestObstacle StrafRecovery::nearestObstacle(double robot_odom_x, double robot_odom_y)
 {
   unsigned int min_x = INT_MAX;
   unsigned int min_y = INT_MAX;
   double minimum_distance = DBL_MAX;
-  double resolution = local_costmap->getCostmap()->getResolution();
   unsigned int cell_x_idx, cell_y_idx;
 
-  costmap_2d::Costmap2D *costmap = local_costmap->getCostmap();
+  costmap_2d::Costmap2D *costmap = local_costmap_->getCostmap();
+
+  unsigned int robot_map_x, robot_map_y;
+  costmap->worldToMap(robot_odom_x, robot_odom_y, robot_map_x, robot_map_y);
 
   for (cell_x_idx = 0; cell_x_idx < costmap->getSizeInCellsX(); cell_x_idx++)
   {
@@ -226,9 +210,6 @@ ClosestObstacle StrafRecovery::nearestObstacle(costmap_2d::Costmap2DROS *local_c
       // if we found an obstacle, check and set if it's the new closest
       if (cost_idx >= costmap_2d::LETHAL_OBSTACLE)
       {
-
-        ROS_WARN("LETHAL AT: %d,%d", cell_x_idx, cell_y_idx);
-
         if (dist_idx < minimum_distance) {
           minimum_distance = dist_idx;
           min_x = cell_x_idx;
@@ -239,10 +220,15 @@ ClosestObstacle StrafRecovery::nearestObstacle(costmap_2d::Costmap2DROS *local_c
   }
 
 
-  return ClosestObstacle(min_x, min_y, minimum_distance);
+  ClosestObstacle co;
+  costmap->mapToWorld(min_x, min_y, co.x, co.y);
+  co.dist = minimum_distance * costmap->getResolution();
+  return co;
 }
 
-ClosestObstacle::ClosestObstacle(int x, int y, double dist): x(x), y(y), dist(dist) {}
+ClosestObstacle::ClosestObstacle(double x, double y, double dist): x(x), y(y), dist(dist) {}
+
+ClosestObstacle::ClosestObstacle(): x(0), y(0), dist(0) {}
 
 }
 
