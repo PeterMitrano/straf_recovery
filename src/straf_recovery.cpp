@@ -75,28 +75,30 @@ void StrafRecovery::runBehavior()
   ros::Rate r(frequency_);
   ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
 
-  tf::Stamped<tf::Pose> global_pose;
   tf::Stamped<tf::Pose> initial_global_pose;
-  local_costmap_->getRobotPose(global_pose);
-  initial_global_pose = global_pose;
+  local_costmap_->getRobotPose(initial_global_pose);
 
   //double current_angle = -M_PI;
   //double start_offset = -angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
-  bool current_distance_translated = 0.0;
+  double current_distance_translated = 0.0;
 
   // find the nearest obstacle
-  double robot_odom_x = global_pose.getOrigin().x();
-  double robot_odom_y = global_pose.getOrigin().y();
+  double robot_odom_x = initial_global_pose.getOrigin().x();
+  double robot_odom_y = initial_global_pose.getOrigin().y();
 
   ClosestObstacle initial_nearest_obstacle = nearestObstacle(robot_odom_x, robot_odom_y);
 
   while (n.ok())
   {
+    tf::Stamped<tf::Pose> global_pose;
     local_costmap_->getRobotPose(global_pose);
+    double robot_odom_x = global_pose.getOrigin().x();
+    double robot_odom_y = global_pose.getOrigin().y();
 
-    current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
+    //TODO: do I need fabs?
+    current_distance_translated = fabs((global_pose.getOrigin() - initial_global_pose.getOrigin()).length());
 
-    //double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
+    double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
     //robot_world_x = global_pose.getOrigin().x();
     //robot_world_y = global_pose.getOrigin().y();
     //current_angle = angles::normalize_angle(normalized_angle + start_offset);
@@ -113,8 +115,6 @@ void StrafRecovery::runBehavior()
     tf::Vector3 diff = global_pose.getOrigin() - obstacle_pose;
     diff.normalize(); //unit vector in the direction we want to go
     double yaw = atan2(diff.y() , diff.x()); //TODO: fix variable name so I know how this work
-
-    ROS_WARN("%f,%f %f,%f %f", robot_odom_x, robot_odom_y, nearest_obstacle.x, nearest_obstacle.y, yaw);
 
     tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw);
 
@@ -154,11 +154,15 @@ void StrafRecovery::runBehavior()
     }
 
     // go away from obstacles
+    tf::Vector3 direction_in_robot_frame = diff.rotate(tf::Vector3(0,0,1), normalized_angle);
+
+    ROS_WARN("%f : %f, %f", normalized_angle, direction_in_robot_frame.x(), direction_in_robot_frame.y());
+
     double vel = min_vel_;
 
     geometry_msgs::Twist cmd_vel;
-    cmd_vel.linear.x = vel * diff.x();
-    cmd_vel.linear.y = vel * diff.y();
+    cmd_vel.linear.x = vel * direction_in_robot_frame.x();
+    cmd_vel.linear.y = -vel * direction_in_robot_frame.y(); //LEFT IS POSITIVE!
     cmd_vel.linear.z = 0.0;
 
     vel_pub.publish(cmd_vel);
