@@ -34,13 +34,14 @@ Obstacle ObstacleFinder::nearestObstacle(costmap_2d::Costmap2DROS* new_costmap, 
     for (cell_y_idx = 0; cell_y_idx < costmap->getSizeInCellsY(); cell_y_idx++)
     {
       double cost_idx = costmap->getCost(cell_x_idx, cell_y_idx);
-      double dx = cell_x_idx - robot_map_x;
-      double dy = cell_y_idx - robot_map_y;
+      int dx = cell_x_idx - robot_map_x;
+      int dy = cell_y_idx - robot_map_y;
 
-      double dist_idx = sqrt(dx * dx + dy * dy);
+      double dist_idx = sqrt((dx * dx) + (dy * dy));
+
 
       // if we found an obstacle, check and set if it's the new closest
-      if (cost_idx > costmap_2d::FREE_SPACE)
+      if (cost_idx >= costmap_2d::LETHAL_OBSTACLE)
       {
         if (dist_idx < minimum_distance) {
           minimum_distance = dist_idx;

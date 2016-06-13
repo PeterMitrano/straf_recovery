@@ -36,7 +36,7 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   private_nh.param("minimum_translate_distance", minimum_translate_distance_, 1.0);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
-  private_nh.param("min_vel", min_vel_, 0.2);
+  private_nh.param("min_vel", min_vel_, 0.1);
   private_nh.param("timeout", timeout_, 5);
   private_nh.param("max_vel", max_vel_, 0.5);
 
@@ -103,8 +103,6 @@ void StrafRecovery::runBehavior()
     current_distance_translated = fabs((global_pose.getOrigin() - initial_global_pose.getOrigin()).length());
 
     double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
-    //robot_world_x = global_pose.getOrigin().x();
-    //robot_world_y = global_pose.getOrigin().y();
     //current_angle = angles::normalize_angle(normalized_angle + start_offset);
 
     //// check if we can rotate
@@ -138,14 +136,15 @@ void StrafRecovery::runBehavior()
 
     if (nearest_obstacle.dist < initial_nearest_obstacle.dist)
     {
-      // return;
+      ROS_WARN("too close to something else");
+      //return;
     }
 
     // check if we've reached max distance
     if (current_distance_translated > maximum_translate_distance_)
     {
       ROS_WARN("Straf Recovery has met maximum translate distance");
-      // return;
+      //return;
     }
 
     if (current_distance_translated > minimum_translate_distance_)
@@ -155,7 +154,7 @@ void StrafRecovery::runBehavior()
       if (can_rotate_in_place)
       {
         ROS_WARN("Straf Recovery is able to rotate in place.");
-        // return;
+        //return;
       }
     }
 
