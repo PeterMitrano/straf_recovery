@@ -36,9 +36,8 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   private_nh.param("minimum_translate_distance", minimum_translate_distance_, 1.0);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
-  private_nh.param("min_vel", min_vel_, 0.1);
+  private_nh.param("straf_vel", vel_, 0.1);
   private_nh.param("timeout", timeout_, 5);
-  private_nh.param("max_vel", max_vel_, 0.5);
 
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
@@ -48,8 +47,7 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   ROS_INFO("minimum_translate_distance %f", minimum_translate_distance_);
   ROS_INFO("maximum_translate_distance %f", maximum_translate_distance_);
-  ROS_INFO("min_vel %f", min_vel_);
-  ROS_INFO("max_vel %f", max_vel_);
+  ROS_INFO("vel %f", vel_);
 
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
@@ -79,8 +77,8 @@ void StrafRecovery::runBehavior()
   tf::Stamped<tf::Pose> initial_global_pose;
   local_costmap_->getRobotPose(initial_global_pose);
 
-  //double current_angle = -M_PI;
-  //double start_offset = -angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
+  double current_angle = -M_PI; // rotate from -M_PI to M_PI
+  double start_offset = -angles::normalize_angle(tf::getYaw(initial_global_pose.getRotation()));
   double current_distance_translated = 0.0;
 
   // find the nearest obstacle
@@ -98,49 +96,19 @@ void StrafRecovery::runBehavior()
     double robot_odom_x = global_pose.getOrigin().x();
     double robot_odom_y = global_pose.getOrigin().y();
 
-    //TODO: do I need fabs?
-    current_distance_translated = fabs((global_pose.getOrigin() - initial_global_pose.getOrigin()).length());
+    current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
 
-    //double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
-    //current_angle = angles::normalize_angle(normalized_angle + start_offset);
+    double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
+    current_angle = angles::normalize_angle(normalized_angle + start_offset);
 
     //// check if we can rotate
-    //double theta = 0.0;
+    double theta = 0.0;
 
-    bool can_rotate_in_place = true;
-    //bool can_rotate_in_place = canRotateInPlace(robot_map_x, robot_map_y, theta, global_pose);
+    bool can_rotate_in_place = canRotateInPlace(robot_odom_x, robot_odom_y, theta, global_pose);
 
     // The obstacle finder has a pointer to the local costmap, so that will keep working.
     // We just need to use the opdated x and y
     obstacle_finder::Obstacle nearest_obstacle = finder.nearestObstacle(robot_odom_x, robot_odom_y);
-
-    tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, global_pose.getOrigin().z());
-    tf::Vector3 diff = global_pose.getOrigin() - obstacle_pose;
-    diff.normalize(); //unit vector in the direction we want to go
-    double yaw = atan2(diff.y() , diff.x()); //TODO: fix variable name so I know how this work
-
-    tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw);
-
-    geometry_msgs::PoseStamped obstacle_msg;
-
-    {
-      obstacle_msg.header.frame_id = global_pose.frame_id_;
-      obstacle_msg.header.stamp = ros::Time::now();
-      obstacle_msg.pose.position.x = nearest_obstacle.x;
-      obstacle_msg.pose.position.y = nearest_obstacle.y;
-      obstacle_msg.pose.orientation.x = straf_direction.x();
-      obstacle_msg.pose.orientation.y = straf_direction.y();
-      obstacle_msg.pose.orientation.z = straf_direction.z();
-      obstacle_msg.pose.orientation.w = straf_direction.w();
-
-      obstacle_pub_.publish(obstacle_msg);
-    }
-
-    if (nearest_obstacle.dist < initial_nearest_obstacle.dist)
-    {
-      ROS_WARN("too close to something else");
-      //return;
-    }
 
     // check if we've reached max distance
     if (current_distance_translated > maximum_translate_distance_)
@@ -151,34 +119,53 @@ void StrafRecovery::runBehavior()
 
     if (current_distance_translated > minimum_translate_distance_)
     {
-      ROS_WARN("Straf Recovery has met minimum translate distance");
-
-      if (can_rotate_in_place)
+      if (nearest_obstacle.dist < initial_nearest_obstacle.dist)
       {
-        ROS_WARN("Straf Recovery is able to rotate in place.");
+        ROS_WARN("Straf Recovery got too close to something else. Stopping.");
+        return;
+      }
+      else if (can_rotate_in_place)
+      {
+        ROS_WARN("Straf Recovery is able to rotate in place. Stopping.");
         return;
       }
     }
+
+    tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, global_pose.getOrigin().z());
+    tf::Vector3 diff = global_pose.getOrigin() - obstacle_pose;
+    double yaw_in_odom_frame = atan2(diff.y() , diff.x());
+
+    tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw_in_odom_frame);
+
+    geometry_msgs::PoseStamped obstacle_msg;
+
+    obstacle_msg.header.frame_id = global_pose.frame_id_;
+    obstacle_msg.header.stamp = ros::Time::now();
+    obstacle_msg.pose.position.x = nearest_obstacle.x;
+    obstacle_msg.pose.position.y = nearest_obstacle.y;
+    obstacle_msg.pose.orientation.x = straf_direction.x();
+    obstacle_msg.pose.orientation.y = straf_direction.y();
+    obstacle_msg.pose.orientation.z = straf_direction.z();
+    obstacle_msg.pose.orientation.w = straf_direction.w();
+
+    obstacle_pub_.publish(obstacle_msg);
 
     geometry_msgs::PoseStamped straf_msg;
     tf_->waitForTransform("/base_link", global_pose.frame_id_, ros::Time::now(), ros::Duration(3.0));
     tf_->transformPose("/base_link", obstacle_msg, straf_msg);
 
-    //in the /base_link frame
+    //angle in the base_link frame
     double straf_angle = tf::getYaw(straf_msg.pose.orientation);
-    ROS_WARN("angle of straf relative to robot: %f", straf_angle);
 
     geometry_msgs::Twist cmd_vel;
-    cmd_vel.linear.x = min_vel_ * cos(straf_angle);
-    cmd_vel.linear.y = min_vel_ * sin(straf_angle); //LEFT IS POSITIVE!
+    cmd_vel.linear.x = vel_ * cos(straf_angle);
+    cmd_vel.linear.y = vel_ * sin(straf_angle);
     cmd_vel.linear.z = 0.0;
 
     vel_pub.publish(cmd_vel);
 
     r.sleep();
   }
-
-  ROS_ERROR("Straf recovery behavior completed.");
 }
 
 bool StrafRecovery::canRotateInPlace(double robot_map_x, double robot_map_y, double theta, tf::Stamped<tf::Pose> global_pose)

@@ -37,8 +37,7 @@ private:
   int timeout_; //in seconds
   double maximum_translate_distance_;
   double minimum_translate_distance_;
-  double max_vel_;
-  double min_vel_;
+  double vel_;
 
   /** \return true if the robot can safely rotate
    * \param x needs to be in the map frame
