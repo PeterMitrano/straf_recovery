@@ -15,9 +15,9 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES straf_recovery
+  LIBRARIES ${PROJECT_NAME}
   CATKIN_DEPENDS roscpp
-#  DEPENDS system_lib
+  DEPENDS roscpp pcl
 )
 
 ###########
@@ -38,15 +38,27 @@ add_definitions(
   ${PCL_DEFINITIONS}
 )
 
-## Declare a C++ library
+add_library(obstacle_finder
+  src/obstacle_finder.cpp
+)
+
+add_executable(obstacle_visualizer
+  src/obstacle_visualizer.cpp
+)
+
 add_library(straf_recovery
   src/straf_recovery.cpp
 )
 
-## Specify libraries to link a library or executable target against
 target_link_libraries(straf_recovery
+  obstacle_finder
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+)
+
+target_link_libraries(obstacle_visualizer
+  obstacle_finder
+  ${catkin_LIBRARIES}
 )
 
 #############
