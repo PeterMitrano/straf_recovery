@@ -34,10 +34,10 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
   ros::NodeHandle private_nh("~/" + name_);
   ros::NodeHandle base_local_planner_nh("~/TrajectoryPlannerROS");
 
-  private_nh.param("minimum_translate_distance", minimum_translate_distance_, 1.0);
+  private_nh.param("minimum_translate_distance", minimum_translate_distance_, 0.5);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
   private_nh.param("straf_vel", vel_, 0.1);
-  private_nh.param("timeout", timeout_, 5);
+  private_nh.param("timeout", timeout_, 10);
 
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
@@ -68,43 +68,37 @@ void StrafRecovery::runBehavior()
     return;
   }
 
-  ROS_WARN("Straf recovery behavior started.");
-
   ros::NodeHandle n;
   ros::Rate r(frequency_);
   ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
 
-  tf::Stamped<tf::Pose> initial_global_pose;
-  local_costmap_->getRobotPose(initial_global_pose);
+  tf::Stamped<tf::Pose> initial_local_pose;
+  local_costmap_->getRobotPose(initial_local_pose);
 
-  double current_angle = -M_PI; // rotate from -M_PI to M_PI
-  double start_offset = -angles::normalize_angle(tf::getYaw(initial_global_pose.getRotation()));
+  tf::Stamped<tf::Pose> initial_global_pose;
+  global_costmap_->getRobotPose(initial_global_pose);
+
   double current_distance_translated = 0.0;
 
   // find the nearest obstacle
-  double robot_odom_x = initial_global_pose.getOrigin().x();
-  double robot_odom_y = initial_global_pose.getOrigin().y();
+  double robot_odom_x = initial_local_pose.getOrigin().x();
+  double robot_odom_y = initial_local_pose.getOrigin().y();
 
   obstacle_finder::ObstacleFinder finder(local_costmap_, robot_odom_x, robot_odom_y);
-  obstacle_finder::Obstacle initial_nearest_obstacle = finder.nearestObstacle();
 
   ros::Time end = ros::Time::now() + ros::Duration(timeout_);
-  while (n.ok() && ros::Time::now() < end)
+  while (n.ok()) // && ros::Time::now() < end)
   {
     tf::Stamped<tf::Pose> global_pose;
-    local_costmap_->getRobotPose(global_pose);
-    double robot_odom_x = global_pose.getOrigin().x();
-    double robot_odom_y = global_pose.getOrigin().y();
+    global_costmap_->getRobotPose(global_pose);
+
+    tf::Stamped<tf::Pose> local_pose;
+    local_costmap_->getRobotPose(local_pose);
+
+    double robot_odom_x = local_pose.getOrigin().x();
+    double robot_odom_y = local_pose.getOrigin().y();
 
     current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
-
-    double normalized_angle = angles::normalize_angle(tf::getYaw(global_pose.getRotation()));
-    current_angle = angles::normalize_angle(normalized_angle + start_offset);
-
-    //// check if we can rotate
-    double theta = 0.0;
-
-    bool can_rotate_in_place = canRotateInPlace(robot_odom_x, robot_odom_y, theta, global_pose);
 
     // The obstacle finder has a pointer to the local costmap, so that will keep working.
     // We just need to use the opdated x and y
@@ -117,29 +111,21 @@ void StrafRecovery::runBehavior()
       return;
     }
 
+    // check if we've reade the minimum distance
     if (current_distance_translated > minimum_translate_distance_)
     {
-      if (nearest_obstacle.dist < initial_nearest_obstacle.dist)
-      {
-        ROS_WARN("Straf Recovery got too close to something else. Stopping.");
         return;
-      }
-      else if (can_rotate_in_place)
-      {
-        ROS_WARN("Straf Recovery is able to rotate in place. Stopping.");
-        return;
-      }
     }
 
-    tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, global_pose.getOrigin().z());
-    tf::Vector3 diff = global_pose.getOrigin() - obstacle_pose;
+    tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, local_pose.getOrigin().z());
+    tf::Vector3 diff = local_pose.getOrigin() - obstacle_pose;
     double yaw_in_odom_frame = atan2(diff.y() , diff.x());
 
     tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw_in_odom_frame);
 
     geometry_msgs::PoseStamped obstacle_msg;
 
-    obstacle_msg.header.frame_id = global_pose.frame_id_;
+    obstacle_msg.header.frame_id = local_pose.frame_id_;
     obstacle_msg.header.stamp = ros::Time::now();
     obstacle_msg.pose.position.x = nearest_obstacle.x;
     obstacle_msg.pose.position.y = nearest_obstacle.y;
@@ -151,7 +137,7 @@ void StrafRecovery::runBehavior()
     obstacle_pub_.publish(obstacle_msg);
 
     geometry_msgs::PoseStamped straf_msg;
-    tf_->waitForTransform("/base_link", global_pose.frame_id_, ros::Time::now(), ros::Duration(3.0));
+    tf_->waitForTransform("/base_link", local_pose.frame_id_, ros::Time::now(), ros::Duration(3.0));
     tf_->transformPose("/base_link", obstacle_msg, straf_msg);
 
     //angle in the base_link frame
@@ -166,24 +152,6 @@ void StrafRecovery::runBehavior()
 
     r.sleep();
   }
-}
-
-bool StrafRecovery::canRotateInPlace(double robot_map_x, double robot_map_y, double theta, tf::Stamped<tf::Pose> global_pose)
-{
-  while (theta < 2 * M_PI)
-  {
-    double current_theta = tf::getYaw(global_pose.getRotation()) + theta;
-
-    // make sure that the point is legal
-    double footprint_cost =
-        local_costmap_model_->footprintCost(robot_map_x, robot_map_y, current_theta, local_costmap_->getRobotFootprint(), 0.0, 0.0);
-    if (footprint_cost < 0.0)
-    {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 }

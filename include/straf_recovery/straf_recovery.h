@@ -39,13 +39,6 @@ private:
   double minimum_translate_distance_;
   double vel_;
 
-  /** \return true if the robot can safely rotate
-   * \param x needs to be in the map frame
-   * \param y needs to be in the map frame
-   * \param theta needs to be in the map frame
-   */
-  bool canRotateInPlace(double robot_map_x, double robot_map_y, double theta, tf::Stamped<tf::Pose> global_pose);
-
 };
 
 }
