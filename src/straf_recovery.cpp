@@ -87,7 +87,7 @@ void StrafRecovery::runBehavior()
   obstacle_finder::ObstacleFinder finder(local_costmap_, robot_odom_x, robot_odom_y);
 
   ros::Time end = ros::Time::now() + ros::Duration(timeout_);
-  while (n.ok()) // && ros::Time::now() < end)
+  while (n.ok() && ros::Time::now() < end)
   {
     tf::Stamped<tf::Pose> global_pose;
     global_costmap_->getRobotPose(global_pose);
