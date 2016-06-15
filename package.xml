@@ -14,6 +14,7 @@
 
   <exec_depend>libpcl-all</exec_depend>
 
+  <depend>base_local_planner</depend>
   <depend>nav_core</depend>
   <depend>geometry_msgs</depend>
   <depend>roscpp</depend>
