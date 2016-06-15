@@ -1,13 +1,12 @@
 #include "straf_recovery/straf_recovery.h"
-#include "obstacle_finder/obstacle_finder.h"
-#include <cmath>
-#include <math.h>
 #include <angles/angles.h>
+#include <math.h>
 #include <pluginlib/class_list_macros.h>
+#include <cmath>
+#include "obstacle_finder/obstacle_finder.h"
 
 namespace straf_recovery
 {
-
 StrafRecovery::StrafRecovery() : initialized_(false)
 {
 }
@@ -42,7 +41,7 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
 
-  //for visualizing
+  // for visualizing
   obstacle_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("obstacle_direction", 10);
 
   ROS_INFO("minimum_translate_distance %f", minimum_translate_distance_);
@@ -114,12 +113,12 @@ void StrafRecovery::runBehavior()
     // check if we've reade the minimum distance
     if (current_distance_translated > minimum_translate_distance_)
     {
-        return;
+      return;
     }
 
     tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, local_pose.getOrigin().z());
     tf::Vector3 diff = local_pose.getOrigin() - obstacle_pose;
-    double yaw_in_odom_frame = atan2(diff.y() , diff.x());
+    double yaw_in_odom_frame = atan2(diff.y(), diff.x());
 
     tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw_in_odom_frame);
 
@@ -140,7 +139,7 @@ void StrafRecovery::runBehavior()
     tf_->waitForTransform("/base_link", local_pose.frame_id_, ros::Time::now(), ros::Duration(3.0));
     tf_->transformPose("/base_link", obstacle_msg, straf_msg);
 
-    //angle in the base_link frame
+    // angle in the base_link frame
     double straf_angle = tf::getYaw(straf_msg.pose.orientation);
 
     geometry_msgs::Twist cmd_vel;
@@ -153,7 +152,6 @@ void StrafRecovery::runBehavior()
     r.sleep();
   }
 }
-
 }
 
 PLUGINLIB_EXPORT_CLASS(straf_recovery::StrafRecovery, nav_core::RecoveryBehavior)

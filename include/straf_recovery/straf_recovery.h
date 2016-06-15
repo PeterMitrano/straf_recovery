@@ -1,13 +1,12 @@
 #pragma once
 
-#include <ros/ros.h>
+#include <base_local_planner/costmap_model.h>
 #include <costmap_2d/costmap_2d_ros.h>
 #include <nav_core/recovery_behavior.h>
-#include <base_local_planner/costmap_model.h>
+#include <ros/ros.h>
 
 namespace straf_recovery
 {
-
 class StrafRecovery : public nav_core::RecoveryBehavior
 {
 public:
@@ -34,11 +33,9 @@ private:
   base_local_planner::CostmapModel* local_costmap_model_;
   ros::Publisher obstacle_pub_;
   double frequency_;
-  int timeout_; //in seconds
+  int timeout_;  // in seconds
   double maximum_translate_distance_;
   double minimum_translate_distance_;
   double vel_;
-
 };
-
 }
