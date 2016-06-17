@@ -68,10 +68,12 @@ flags = [
 '-isystem', './tests/gmock/gtest/include',
 '-isystem', './tests/gmock',
 '-isystem', './tests/gmock/include',
-'-I', '/usr/include',
 '-I', '/usr/local/include',
 '-I', 'include',
-'-I', '/home/pdmitrano/catkin_ws/src/sbpl_catkin/sbpl/src/include'
+'-I', '/usr/lib/gcc/x86_64-linux-gnu/4.9/include',
+'-I', '/usr/include/x86_64-linux-gnu',
+'-I', '/usr/include'
+
 ]
 
 

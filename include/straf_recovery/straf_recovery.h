@@ -3,6 +3,7 @@
 #include <base_local_planner/costmap_model.h>
 #include <costmap_2d/costmap_2d_ros.h>
 #include <nav_core/recovery_behavior.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <ros/ros.h>
 
 namespace straf_recovery
@@ -26,16 +27,31 @@ public:
 
 private:
   bool initialized_;
-  std::string name_;
-  tf::TransformListener* tf_;
-  costmap_2d::Costmap2DROS* local_costmap_;
-  costmap_2d::Costmap2DROS* global_costmap_;
-  base_local_planner::CostmapModel* local_costmap_model_;
-  ros::Publisher obstacle_pub_;
   double frequency_;
-  int timeout_;  // in seconds
   double maximum_translate_distance_;
   double minimum_translate_distance_;
+  double go_to_goal_distance_threshold_;
+  double xy_goal_tolerance_;
   double vel_;
+  int timeout_;  // in seconds
+  base_local_planner::CostmapModel* local_costmap_model_;
+  costmap_2d::Costmap2DROS* local_costmap_;
+  costmap_2d::Costmap2DROS* global_costmap_;
+  geometry_msgs::PoseStamped last_goal_;
+  ros::Publisher obstacle_pub_;
+  ros::Publisher vel_pub_;
+  ros::Subscriber goal_sub_;
+  std::string name_;
+  tf::TransformListener* tf_;
+
+  /**
+   * straf in the direction of a point, given in the odom frame
+   */
+  void strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose);
+
+  /**
+   * uses move_base_simple/goal
+   */
+  void goalCallback(const geometry_msgs::PoseStamped& msg);
 };
 }

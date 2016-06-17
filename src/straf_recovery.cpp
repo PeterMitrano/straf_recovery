@@ -3,6 +3,7 @@
 #include <math.h>
 #include <pluginlib/class_list_macros.h>
 #include <cmath>
+#include <tf/transform_datatypes.h>
 #include "obstacle_finder/obstacle_finder.h"
 
 namespace straf_recovery
@@ -31,15 +32,18 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   // get some parameters from the parameter server
   ros::NodeHandle private_nh("~/" + name_);
+  ros::NodeHandle nh;
   ros::NodeHandle base_local_planner_nh("~/TrajectoryPlannerROS");
 
+  private_nh.param("go_to_goal_distance_threshold", go_to_goal_distance_threshold_, 1.0);
   private_nh.param("minimum_translate_distance", minimum_translate_distance_, 0.5);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
   private_nh.param("straf_vel", vel_, 0.1);
   private_nh.param("timeout", timeout_, 10);
 
-  // use the same control frequency as the base local planner
+  // use the same control frequency and xy goal tolerance as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
+  base_local_planner_nh.param("xy_goal_tolerance", xy_goal_tolerance_, 0.1);
 
   // for visualizing
   obstacle_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("obstacle_direction", 10);
@@ -50,6 +54,9 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   // use the same control frequency as the base local planner
   base_local_planner_nh.param("frequency", frequency_, 20.0);
+
+  // knowing current goal means we can cheat and straf to the goal
+  goal_sub_ = nh.subscribe("move_base_simple/goal", 10, &StrafRecovery::goalCallback, this);
 }
 
 void StrafRecovery::runBehavior()
@@ -69,7 +76,7 @@ void StrafRecovery::runBehavior()
 
   ros::NodeHandle n;
   ros::Rate r(frequency_);
-  ros::Publisher vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
+  vel_pub_ = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
 
   tf::Stamped<tf::Pose> initial_local_pose;
   local_costmap_->getRobotPose(initial_local_pose);
@@ -99,59 +106,88 @@ void StrafRecovery::runBehavior()
 
     current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
 
-    // The obstacle finder has a pointer to the local costmap, so that will keep working.
-    // We just need to use the opdated x and y
-    obstacle_finder::Obstacle nearest_obstacle = finder.nearestObstacle(robot_odom_x, robot_odom_y);
+    tf::Stamped<tf::Pose> last_goal_pose;
+    tf::poseStampedMsgToTF(last_goal_, last_goal_pose);
 
-    // check if we've reached max distance
-    if (current_distance_translated > maximum_translate_distance_)
-    {
-      ROS_WARN("Straf Recovery has met maximum translate distance");
-      return;
+    double distance_to_goal = (last_goal_pose.getOrigin() - local_pose.getOrigin()).length();
+
+    ROS_INFO("distance to goal: %f", distance_to_goal);
+
+    if (distance_to_goal < go_to_goal_distance_threshold_) {
+      tf::Pose goal_pose;
+      tf::poseMsgToTF(last_goal_.pose, goal_pose);
+      strafInDiretionOfPose(local_pose, goal_pose.getOrigin());
+
+      if (distance_to_goal < xy_goal_tolerance_){
+        return;
+      }
     }
+    else {
 
-    // check if we've reade the minimum distance
-    if (current_distance_translated > minimum_translate_distance_)
-    {
-      return;
+      // The obstacle finder has a pointer to the local costmap, so that will keep working.
+      // We just need to use the opdated x and y
+      obstacle_finder::Obstacle nearest_obstacle = finder.nearestObstacle(robot_odom_x, robot_odom_y);
+
+      // check if we've reached max distance
+      if (current_distance_translated > maximum_translate_distance_)
+      {
+        ROS_WARN("Straf Recovery has met maximum translate distance");
+        return;
+      }
+
+      // check if we've reade the minimum distance
+      if (current_distance_translated > minimum_translate_distance_)
+      {
+        return;
+      }
+
+      tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, local_pose.getOrigin().z());
+      strafInDiretionOfPose(local_pose, obstacle_pose);
     }
-
-    tf::Vector3 obstacle_pose(nearest_obstacle.x, nearest_obstacle.y, local_pose.getOrigin().z());
-    tf::Vector3 diff = local_pose.getOrigin() - obstacle_pose;
-    double yaw_in_odom_frame = atan2(diff.y(), diff.x());
-
-    tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw_in_odom_frame);
-
-    geometry_msgs::PoseStamped obstacle_msg;
-
-    obstacle_msg.header.frame_id = local_pose.frame_id_;
-    obstacle_msg.header.stamp = ros::Time::now();
-    obstacle_msg.pose.position.x = nearest_obstacle.x;
-    obstacle_msg.pose.position.y = nearest_obstacle.y;
-    obstacle_msg.pose.orientation.x = straf_direction.x();
-    obstacle_msg.pose.orientation.y = straf_direction.y();
-    obstacle_msg.pose.orientation.z = straf_direction.z();
-    obstacle_msg.pose.orientation.w = straf_direction.w();
-
-    obstacle_pub_.publish(obstacle_msg);
-
-    geometry_msgs::PoseStamped straf_msg;
-    tf_->waitForTransform("/base_link", local_pose.frame_id_, ros::Time::now(), ros::Duration(3.0));
-    tf_->transformPose("/base_link", obstacle_msg, straf_msg);
-
-    // angle in the base_link frame
-    double straf_angle = tf::getYaw(straf_msg.pose.orientation);
-
-    geometry_msgs::Twist cmd_vel;
-    cmd_vel.linear.x = vel_ * cos(straf_angle);
-    cmd_vel.linear.y = vel_ * sin(straf_angle);
-    cmd_vel.linear.z = 0.0;
-
-    vel_pub.publish(cmd_vel);
-
     r.sleep();
   }
 }
+
+void StrafRecovery::strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose){
+  tf::Vector3 diff = current_pose.getOrigin() - direction_pose;
+  double yaw_in_odom_frame = atan2(diff.y(), diff.x());
+
+  tf::Quaternion straf_direction = tf::createQuaternionFromYaw(yaw_in_odom_frame);
+
+  geometry_msgs::PoseStamped obstacle_msg;
+
+  obstacle_msg.header.frame_id = current_pose.frame_id_;
+  obstacle_msg.header.stamp = ros::Time::now();
+  obstacle_msg.pose.position.x = direction_pose.getX();
+  obstacle_msg.pose.position.y = current_pose.getOrigin().x();
+  obstacle_msg.pose.orientation.x = straf_direction.x();
+  obstacle_msg.pose.orientation.y = straf_direction.y();
+  obstacle_msg.pose.orientation.z = straf_direction.z();
+  obstacle_msg.pose.orientation.w = straf_direction.w();
+
+  obstacle_pub_.publish(obstacle_msg);
+
+  geometry_msgs::PoseStamped straf_msg;
+  tf_->waitForTransform("/base_link", current_pose.frame_id_, ros::Time::now(), ros::Duration(3.0));
+  tf_->transformPose("/base_link", obstacle_msg, straf_msg);
+
+  // angle in the base_link frame
+  double straf_angle = tf::getYaw(straf_msg.pose.orientation);
+
+  geometry_msgs::Twist cmd_vel;
+  cmd_vel.linear.x = vel_ * cos(straf_angle);
+  cmd_vel.linear.y = vel_ * sin(straf_angle);
+  cmd_vel.linear.z = 0.0;
+
+  vel_pub_.publish(cmd_vel);
+
+}
+
+void StrafRecovery::goalCallback(const geometry_msgs::PoseStamped& msg)
+{
+  last_goal_ = msg;
+}
+
 }
 
 PLUGINLIB_EXPORT_CLASS(straf_recovery::StrafRecovery, nav_core::RecoveryBehavior)
