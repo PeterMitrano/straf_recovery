@@ -6,6 +6,10 @@ project(straf_recovery)
 ## is used, also find other catkin packages
 find_package(PCL REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
+  base_local_planner
+  geometry_msgs
+  nav_core
+  std_msgs
   roscpp
 )
 
@@ -16,8 +20,13 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp
-  DEPENDS roscpp pcl
+  CATKIN_DEPENDS
+    base_local_planner
+    geometry_msgs
+    nav_core
+    std_msgs
+    roscpp
+  DEPENDS pcl
 )
 
 ###########

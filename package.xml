@@ -17,6 +17,7 @@
   <depend>base_local_planner</depend>
   <depend>nav_core</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>roscpp</depend>
 
   <doc_depend>doxygen</doc_depend>

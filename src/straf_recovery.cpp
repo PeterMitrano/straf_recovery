@@ -1,14 +1,16 @@
 #include "straf_recovery/straf_recovery.h"
+#include "obstacle_finder/obstacle_finder.h"
+
 #include <angles/angles.h>
+#include <cmath>
 #include <math.h>
 #include <pluginlib/class_list_macros.h>
-#include <cmath>
+#include <std_msgs/Int32.h>
 #include <tf/transform_datatypes.h>
-#include "obstacle_finder/obstacle_finder.h"
 
 namespace straf_recovery
 {
-StrafRecovery::StrafRecovery() : initialized_(false)
+StrafRecovery::StrafRecovery() : initialized_(false), cycles_(0)
 {
 }
 
@@ -47,6 +49,9 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
 
   // for visualizing
   obstacle_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("obstacle_direction", 10);
+
+  // for failure detection
+  cycles_pub_ = private_nh.advertise<std_msgs::Int32>("cycles", 10);
 
   ROS_INFO("minimum_translate_distance %f", minimum_translate_distance_);
   ROS_INFO("maximum_translate_distance %f", maximum_translate_distance_);
@@ -146,6 +151,11 @@ void StrafRecovery::runBehavior()
     }
     r.sleep();
   }
+
+  cycles_++;
+  std_msgs::Int32 msg;
+  msg.data = cycles_;
+  cycles_pub_.publish(msg);
 }
 
 void StrafRecovery::strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose){

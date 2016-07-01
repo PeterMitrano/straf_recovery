@@ -34,10 +34,12 @@ private:
   double xy_goal_tolerance_;
   double vel_;
   int timeout_;  // in seconds
+  int cycles_; // track how many times we've run for detecting failure?
   base_local_planner::CostmapModel* local_costmap_model_;
   costmap_2d::Costmap2DROS* local_costmap_;
   costmap_2d::Costmap2DROS* global_costmap_;
   geometry_msgs::PoseStamped last_goal_;
+  ros::Publisher cycles_pub_;
   ros::Publisher obstacle_pub_;
   ros::Publisher vel_pub_;
   ros::Subscriber goal_sub_;
