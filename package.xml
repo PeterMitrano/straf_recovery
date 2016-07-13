@@ -3,6 +3,7 @@
   <name>straf_recovery</name>
   <version>0.0.0</version>
   <description>The straf_recovery package</description>
+  <url>http://www.ros.org/wiki/straf_recovery</url>
 
   <maintainer email="mitranopeter@gmail.com">Peter Mitrano</maintainer>
 

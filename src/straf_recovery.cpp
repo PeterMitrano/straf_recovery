@@ -198,6 +198,17 @@ void StrafRecovery::goalCallback(const geometry_msgs::PoseStamped& msg)
   last_goal_ = msg;
 }
 
+void StrafRecovery::reconfigureCB(StrafRecoveryConfig& config, uint32_t level)
+{
+  timeout_ = config.timeout;
+  minimum_translate_distance_ = config.minimum_translate_distance;
+  maximum_translate_distance_ = config.maximum_translate_distance;
+  xy_goal_tolerance_ = config.xy_goal_tolerance;
+  go_to_goal_distance_threshold_ = config.go_to_goal_distance_threshold;
+  vel_ = config.straf_vel;
+  frequency_ = config.frequency;
+}
+
 }
 
 PLUGINLIB_EXPORT_CLASS(straf_recovery::StrafRecovery, nav_core::RecoveryBehavior)

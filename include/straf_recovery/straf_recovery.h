@@ -1,5 +1,7 @@
 #pragma once
 
+#include "straf_recovery/StrafRecoveryConfig.h"
+
 #include <base_local_planner/costmap_model.h>
 #include <costmap_2d/costmap_2d_ros.h>
 #include <nav_core/recovery_behavior.h>
@@ -46,14 +48,14 @@ private:
   std::string name_;
   tf::TransformListener* tf_;
 
-  /**
-   * straf in the direction of a point, given in the odom frame
-   */
+  /** @brief straf in the direction of a point, given in the odom frame */
   void strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose);
 
-  /**
-   * uses move_base_simple/goal
-   */
+  /** @brief uses move_base_simple/goal */
   void goalCallback(const geometry_msgs::PoseStamped& msg);
+
+  /** @brief callback for reconfigure */
+  void reconfigureCB(StrafRecoveryConfig& config, uint32_t level);
+
 };
 }
