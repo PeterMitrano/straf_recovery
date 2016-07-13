@@ -79,6 +79,8 @@ void StrafRecovery::runBehavior()
     return;
   }
 
+  ROS_WARN("Entering straf recovery behavior.");
+
   ros::NodeHandle n;
   ros::Rate r(frequency_);
   vel_pub_ = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
@@ -115,8 +117,6 @@ void StrafRecovery::runBehavior()
     tf::poseStampedMsgToTF(last_goal_, last_goal_pose);
 
     double distance_to_goal = (last_goal_pose.getOrigin() - local_pose.getOrigin()).length();
-
-    ROS_INFO("distance to goal: %f", distance_to_goal);
 
     if (distance_to_goal < go_to_goal_distance_threshold_) {
       tf::Pose goal_pose;
