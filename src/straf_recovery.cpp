@@ -44,7 +44,7 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
   dsrv_->setCallback(cb);
 
   private_nh.param("enabled", enabled_, true);
-  private_nh.param("go_to_goal_distance_threshold", go_to_goal_distance_threshold_, 1.0);
+  private_nh.param("go_to_goal_distance_threshold", go_to_goal_distance_threshold_, 0.0);
   private_nh.param("minimum_translate_distance", minimum_translate_distance_, 0.5);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
   private_nh.param("straf_vel", vel_, 0.1);
@@ -127,11 +127,12 @@ void StrafRecovery::runBehavior()
     current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
 
     tf::Stamped<tf::Pose> last_goal_pose;
+    last_goal_pose.frame_id = "map";
     tf::poseStampedMsgToTF(last_goal_, last_goal_pose);
 
     double distance_to_goal = (last_goal_pose.getOrigin() - local_pose.getOrigin()).length();
 
-    ROS_INFO("dist: %f", distance_to_goal);
+    ROS_DEBUG("distance_to_goal: %f", distance_to_goal);
     if (distance_to_goal < go_to_goal_distance_threshold_) {
       ROS_INFO("close enough to goal. strafing there instead");
       tf::Pose goal_pose;
@@ -210,6 +211,7 @@ void StrafRecovery::strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf
 
 void StrafRecovery::goalCallback(const geometry_msgs::PoseStamped& msg)
 {
+  ROS_INFO_ONCE("Received goal");
   last_goal_ = msg;
 }
 
