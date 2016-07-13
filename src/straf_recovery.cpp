@@ -127,7 +127,6 @@ void StrafRecovery::runBehavior()
     current_distance_translated = (global_pose.getOrigin() - initial_global_pose.getOrigin()).length();
 
     tf::Stamped<tf::Pose> last_goal_pose;
-    last_goal_pose.frame_id = "map";
     tf::poseStampedMsgToTF(last_goal_, last_goal_pose);
 
     double distance_to_goal = (last_goal_pose.getOrigin() - local_pose.getOrigin()).length();
