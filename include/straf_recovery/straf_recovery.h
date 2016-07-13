@@ -29,6 +29,7 @@ public:
 
 private:
   bool initialized_;
+  bool enabled_;
   double frequency_;
   double maximum_translate_distance_;
   double minimum_translate_distance_;
@@ -38,6 +39,7 @@ private:
   int timeout_;  // in seconds
   int cycles_; // track how many times we've run for detecting failure?
   base_local_planner::CostmapModel* local_costmap_model_;
+  dynamic_reconfigure::Server<StrafRecoveryConfig>* dsrv_;
   costmap_2d::Costmap2DROS* local_costmap_;
   costmap_2d::Costmap2DROS* global_costmap_;
   geometry_msgs::PoseStamped last_goal_;
@@ -49,7 +51,7 @@ private:
   tf::TransformListener* tf_;
 
   /** @brief straf in the direction of a point, given in the odom frame */
-  void strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose);
+  void strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose, bool away=true);
 
   /** @brief uses move_base_simple/goal */
   void goalCallback(const geometry_msgs::PoseStamped& msg);

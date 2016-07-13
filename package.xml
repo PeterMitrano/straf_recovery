@@ -15,7 +15,9 @@
 
   <exec_depend>libpcl-all</exec_depend>
 
+  <depend>angles</depend>
   <depend>base_local_planner</depend>
+  <depend>dynamic_reconfigure</depend>
   <depend>nav_core</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>

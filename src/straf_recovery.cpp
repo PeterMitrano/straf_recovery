@@ -37,6 +37,13 @@ void StrafRecovery::initialize(std::string name, tf::TransformListener *tf, cost
   ros::NodeHandle nh;
   ros::NodeHandle base_local_planner_nh("~/TrajectoryPlannerROS");
 
+  // setup dynamic reconfigure
+  dsrv_ = new dynamic_reconfigure::Server<StrafRecoveryConfig>(private_nh);
+  dynamic_reconfigure::Server<StrafRecoveryConfig>::CallbackType cb =
+      boost::bind(&StrafRecovery::reconfigureCB, this, _1, _2);
+  dsrv_->setCallback(cb);
+
+  private_nh.param("enabled", enabled_, true);
   private_nh.param("go_to_goal_distance_threshold", go_to_goal_distance_threshold_, 1.0);
   private_nh.param("minimum_translate_distance", minimum_translate_distance_, 0.5);
   private_nh.param("maximum_translate_distance", maximum_translate_distance_, 5.0);
@@ -69,6 +76,12 @@ void StrafRecovery::runBehavior()
   if (!initialized_)
   {
     ROS_ERROR("thou shall not fail to call initialize! Doing nothing.");
+    return;
+  }
+
+  if (!enabled_)
+  {
+    ROS_INFO("skipping %s because it's disabled.", name_.c_str());
     return;
   }
 
@@ -118,10 +131,12 @@ void StrafRecovery::runBehavior()
 
     double distance_to_goal = (last_goal_pose.getOrigin() - local_pose.getOrigin()).length();
 
+    ROS_INFO("dist: %f", distance_to_goal);
     if (distance_to_goal < go_to_goal_distance_threshold_) {
+      ROS_INFO("close enough to goal. strafing there instead");
       tf::Pose goal_pose;
       tf::poseMsgToTF(last_goal_.pose, goal_pose);
-      strafInDiretionOfPose(local_pose, goal_pose.getOrigin());
+      strafInDiretionOfPose(local_pose, goal_pose.getOrigin(), false); //straf towards not away
 
       if (distance_to_goal < xy_goal_tolerance_){
         return;
@@ -158,7 +173,7 @@ void StrafRecovery::runBehavior()
   cycles_pub_.publish(msg);
 }
 
-void StrafRecovery::strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose){
+void StrafRecovery::strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf::Vector3 direction_pose, bool away){
   tf::Vector3 diff = current_pose.getOrigin() - direction_pose;
   double yaw_in_odom_frame = atan2(diff.y(), diff.x());
 
@@ -169,7 +184,7 @@ void StrafRecovery::strafInDiretionOfPose(tf::Stamped<tf::Pose> current_pose, tf
   obstacle_msg.header.frame_id = current_pose.frame_id_;
   obstacle_msg.header.stamp = ros::Time::now();
   obstacle_msg.pose.position.x = direction_pose.getX();
-  obstacle_msg.pose.position.y = current_pose.getOrigin().x();
+  obstacle_msg.pose.position.y = direction_pose.getY();
   obstacle_msg.pose.orientation.x = straf_direction.x();
   obstacle_msg.pose.orientation.y = straf_direction.y();
   obstacle_msg.pose.orientation.z = straf_direction.z();
@@ -200,6 +215,7 @@ void StrafRecovery::goalCallback(const geometry_msgs::PoseStamped& msg)
 
 void StrafRecovery::reconfigureCB(StrafRecoveryConfig& config, uint32_t level)
 {
+  enabled_ = config.enabled;
   timeout_ = config.timeout;
   minimum_translate_distance_ = config.minimum_translate_distance;
   maximum_translate_distance_ = config.maximum_translate_distance;
